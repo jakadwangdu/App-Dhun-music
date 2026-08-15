@@ -1,0 +1,6 @@
+{
+  "name": "LanceBuddy Music",
+  "description": "Native music streaming experience for LanceBuddy Music webapp with background audio, media controls, and offline handling",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
