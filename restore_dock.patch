@@ -1,0 +1,234 @@
+--- app/src/main/java/com/example/ui/LanceBuddyMusicScreen.kt
++++ app/src/main/java/com/example/ui/LanceBuddyMusicScreen.kt
+@@ -207,2 +207,235 @@
+                     .statusBarsPadding()
+             ) {
++                // Top Action & Navigation Bar
++                Surface(
++                    color = MaterialTheme.colorScheme.surface,
++                    tonalElevation = 4.dp,
++                    modifier = Modifier.fillMaxWidth()
++                ) {
++                    Column {
++                        Row(
++                            modifier = Modifier
++                                .fillMaxWidth()
++                                .padding(horizontal = 8.dp, vertical = 6.dp),
++                            verticalAlignment = Alignment.CenterVertically
++                        ) {
++                            // App Icon & Brand Tag
++                            Row(
++                                verticalAlignment = Alignment.CenterVertically,
++                                modifier = Modifier
++                                    .clip(RoundedCornerShape(12.dp))
++                                    .background(
++                                        Brush.horizontalGradient(
++                                            listOf(
++                                                MusicVioletPrimary.copy(alpha = 0.2f),
++                                                MusicCyanSecondary.copy(alpha = 0.2f)
++                                            )
++                                        )
++                                    )
++                                    .padding(horizontal = 8.dp, vertical = 6.dp)
++                            ) {
++                                Box(
++                                    modifier = Modifier
++                                        .size(28.dp)
++                                        .clip(CircleShape)
++                                        .background(
++                                            Brush.linearGradient(
++                                                listOf(MusicVioletPrimary, MusicPinkTertiary)
++                                            )
++                                        ),
++                                    contentAlignment = Alignment.Center
++                                ) {
++                                    Icon(
++                                        imageVector = Icons.Default.Audiotrack,
++                                        contentDescription = "App Logo",
++                                        tint = Color.White,
++                                        modifier = Modifier.size(16.dp)
++                                    )
++                                }
++                                Spacer(modifier = Modifier.width(6.dp))
++                                Column {
++                                    Text(
++                                        text = "LanceBuddy",
++                                        style = MaterialTheme.typography.labelSmall.copy(
++                                            fontSize = 9.sp,
++                                            fontWeight = FontWeight.Bold,
++                                            color = MusicCyanSecondary
++                                        )
++                                    )
++                                    Text(
++                                        text = "MUSIC",
++                                        style = MaterialTheme.typography.titleSmall.copy(
++                                            fontSize = 12.sp,
++                                            fontWeight = FontWeight.Black,
++                                            letterSpacing = 1.sp,
++                                            color = Color.White
++                                        )
++                                    )
++                                }
++                            }
++
++                            Spacer(modifier = Modifier.width(8.dp))
++
++                            // Current Page Title / Status
++                            Column(
++                                modifier = Modifier
++                                    .weight(1f)
++                                    .padding(horizontal = 4.dp)
++                            ) {
++                                Text(
++                                    text = if (isLoading) "Loading stream..." else pageTitle,
++                                    style = MaterialTheme.typography.bodyMedium.copy(
++                                        fontWeight = FontWeight.SemiBold,
++                                        color = MaterialTheme.colorScheme.onSurface
++                                    ),
++                                    maxLines = 1,
++                                    overflow = TextOverflow.Ellipsis
++                                )
++                                Row(verticalAlignment = Alignment.CenterVertically) {
++                                    Box(
++                                        modifier = Modifier
++                                            .size(6.dp)
++                                            .clip(CircleShape)
++                                            .background(
++                                                if (!isOnline) Color(0xFFEF4444)
++                                                else if (isLoading) MusicCyanSecondary
++                                                else Color(0xFF10B981)
++                                            )
++                                    )
++                                    Spacer(modifier = Modifier.width(4.dp))
++                                    Text(
++                                        text = if (!isOnline) "Offline" else if (isLoading) "Syncing" else "Online",
++                                        style = MaterialTheme.typography.labelSmall.copy(
++                                            fontSize = 10.sp,
++                                            color = MaterialTheme.colorScheme.onSurfaceVariant
++                                        )
++                                    )
++                                }
++                            }
++
++                            // Navigation Controls
++                            IconButton(
++                                onClick = { webViewRef?.goBack() },
++                                enabled = canGoBack,
++                                modifier = Modifier.testTag("nav_back_button")
++                            ) {
++                                Icon(
++                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
++                                    contentDescription = "Go Back",
++                                    tint = if (canGoBack) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
++                                    modifier = Modifier.size(20.dp)
++                                )
++                            }
++
++                            IconButton(
++                                onClick = { webViewRef?.goForward() },
++                                enabled = canGoForward,
++                                modifier = Modifier.testTag("nav_forward_button")
++                            ) {
++                                Icon(
++                                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
++                                    contentDescription = "Go Forward",
++                                    tint = if (canGoForward) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
++                                    modifier = Modifier.size(20.dp)
++                                )
++                            }
++
++                            IconButton(
++                                onClick = {
++                                    hasError = false
++                                    errorMessage = null
++                                    webViewRef?.reload()
++                                },
++                                modifier = Modifier.testTag("reload_button")
++                            ) {
++                                Icon(
++                                    imageVector = Icons.Default.Refresh,
++                                    contentDescription = "Reload Page",
++                                    tint = MaterialTheme.colorScheme.onSurface,
++                                    modifier = Modifier.size(20.dp)
++                                )
++                            }
++
++                            IconButton(
++                                onClick = {
++                                    hasError = false
++                                    errorMessage = null
++                                    webViewRef?.loadUrl(DEFAULT_MUSIC_URL)
++                                },
++                                modifier = Modifier.testTag("home_button")
++                            ) {
++                                Icon(
++                                    imageVector = Icons.Default.Home,
++                                    contentDescription = "Go to Homepage",
++                                    tint = MaterialTheme.colorScheme.onSurface,
++                                    modifier = Modifier.size(20.dp)
++                                )
++                            }
++
++                            // Options Menu
++                            Box {
++                                IconButton(
++                                    onClick = { showMenu = true },
++                                    modifier = Modifier.testTag("options_menu_button")
++                                ) {
++                                    Icon(
++                                        imageVector = Icons.Default.MoreVert,
++                                        contentDescription = "More Options",
++                                        tint = MaterialTheme.colorScheme.onSurface,
++                                        modifier = Modifier.size(20.dp)
++                                    )
++                                }
++
++                                DropdownMenu(
++                                    expanded = showMenu,
++                                    onDismissRequest = { showMenu = false },
++                                    modifier = Modifier.background(MaterialTheme.colorScheme.surfaceVariant)
++                                ) {
++                                    DropdownMenuItem(
++                                        text = { Text("Open in External Browser") },
++                                        leadingIcon = {
++                                            Icon(
++                                                Icons.AutoMirrored.Filled.OpenInNew,
++                                                contentDescription = null,
++                                                tint = MusicCyanSecondary
++                                            )
++                                        },
++                                        onClick = {
++                                            showMenu = false
++                                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(currentUrl.ifEmpty { DEFAULT_MUSIC_URL }))
++                                            context.startActivity(intent)
++                                        }
++                                    )
++                                }
++                            }
++                        }
++
++                        // Smooth animated loading indicator
++                        val animatedProgress by animateFloatAsState(
++                            targetValue = if (isLoading) progress.coerceIn(0.05f, 0.95f) else 1f,
++                            animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
++                            label = "webProgress"
++                        )
++
++                        AnimatedVisibility(
++                            visible = isLoading,
++                            enter = fadeIn(),
++                            exit = fadeOut()
++                        ) {
++                            LinearProgressIndicator(
++                                progress = { animatedProgress },
++                                modifier = Modifier
++                                    .fillMaxWidth()
++                                    .height(3.dp),
++                                color = MusicVioletPrimary,
++                                trackColor = MaterialTheme.colorScheme.surfaceVariant
++                            )
++                        }
++                    }
++                }
++
+                 // Offline Notice Bar (if offline)

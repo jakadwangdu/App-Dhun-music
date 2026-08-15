@@ -3,7 +3,7 @@
     <item
         android:width="66dp"
         android:height="66dp"
-        android:drawable="@drawable/calligraphy_d_logo"
+        android:drawable="@drawable/lancebuddy_music_icon"
         android:gravity="center" />
 </layer-list>
 
