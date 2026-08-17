@@ -6,7 +6,7 @@ import kotlinx.coroutines.flow.Flow
 import java.io.File
 
 class MusicRepository(private val dao: DownloadedSongDao) {
-    val downloadedSongs: Flow<List<DownloadedSong>> = dao.getSongsByPlaylist("Downloaded")
+    val downloadedSongs: Flow<List<DownloadedSong>> = dao.getSongsByPlaylist("Downloads")
 
     suspend fun insertSong(song: DownloadedSong): Long = dao.insertSong(song)
 

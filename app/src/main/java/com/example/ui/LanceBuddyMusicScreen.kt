@@ -186,7 +186,7 @@ fun LanceBuddyMusicScreen(
         scope.launch {
             isDownloading = true
             downloadProgress = 0f
-            snackbarHostState.showSnackbar("Downloading track to 'Downloaded' playlist...")
+            snackbarHostState.showSnackbar("Downloading track to 'Downloads' playlist...")
 
             val result = downloadManager.downloadSong(
                 url = url,
@@ -197,7 +197,7 @@ fun LanceBuddyMusicScreen(
 
             isDownloading = false
             result.onSuccess { song ->
-                snackbarHostState.showSnackbar("Saved '${song.title}' to Downloaded playlist!")
+                snackbarHostState.showSnackbar("Saved '${song.title}' to Downloads playlist!")
             }.onFailure { err ->
                 snackbarHostState.showSnackbar("Download failed: ${err.localizedMessage}")
             }
@@ -234,7 +234,7 @@ fun LanceBuddyMusicScreen(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "Offline Mode - You can play from 'Downloaded' playlist",
+                                    text = "Offline Mode - You can play from 'Downloads' playlist",
                                     style = MaterialTheme.typography.bodySmall.copy(
                                         color = Color.White,
                                         fontWeight = FontWeight.Medium
@@ -298,7 +298,7 @@ fun LanceBuddyMusicScreen(
                                     userAgentString = settings.userAgentString + " LanceBuddyMusicNativeApp/1.1"
                                 }
 
-                                // Intercept audio file downloads to save into 'Downloaded' playlist
+                                // Intercept audio file downloads to save into 'Downloads' playlist
                                 setDownloadListener { url, _, _, _, _ ->
                                     startDownload(url)
                                 }
@@ -361,6 +361,48 @@ fun LanceBuddyMusicScreen(
                                         isLoading = false
                                         url?.let { currentUrl = it }
                                         MusicPlaybackService.startWebBackground(ctx)
+                                        
+                                        // Inject JS to reposition "Buy Me a Coffee" icon
+                                        view?.evaluateJavascript("""
+                                            (function() {
+                                                var attempts = 0;
+                                                var interval = setInterval(function() {
+                                                    attempts++;
+                                                    var coffeeLink = document.querySelector('a[href*="buymeacoffee.com"]');
+                                                    
+                                                    // Find fullscreen button by looking at SVGs and buttons
+                                                    var allBtns = Array.from(document.querySelectorAll('button'));
+                                                    var fullscreenBtn = allBtns.find(b => (b.getAttribute('title') || '').toLowerCase().includes('full screen') || (b.getAttribute('aria-label') || '').toLowerCase().includes('fullscreen'));
+                                                    if (!fullscreenBtn) {
+                                                        var svgs = Array.from(document.querySelectorAll('svg'));
+                                                        var fsSvg = svgs.find(s => s.classList.toString().toLowerCase().includes('fullscreen') || s.classList.toString().toLowerCase().includes('expand'));
+                                                        if (fsSvg) fullscreenBtn = fsSvg.closest('button') || fsSvg.parentElement;
+                                                    }
+                                                    
+                                                    if (coffeeLink && fullscreenBtn) {
+                                                        var parent = fullscreenBtn.parentElement;
+                                                        fullscreenBtn.style.display = 'none';
+                                                        
+                                                        // Adjust coffee icon style to fit top bar
+                                                        coffeeLink.style.display = 'inline-flex';
+                                                        coffeeLink.style.alignItems = 'center';
+                                                        coffeeLink.style.justifyContent = 'center';
+                                                        coffeeLink.style.margin = '0 8px';
+                                                        
+                                                        var img = coffeeLink.querySelector('img');
+                                                        if (img) {
+                                                            img.style.height = '28px'; // Match standard icon size
+                                                            img.style.width = 'auto';
+                                                        }
+                                                        
+                                                        parent.insertBefore(coffeeLink, fullscreenBtn);
+                                                        clearInterval(interval);
+                                                    } else if (attempts > 10) {
+                                                        clearInterval(interval);
+                                                    }
+                                                }, 1000);
+                                            })();
+                                        """.trimIndent(), null)
                                     }
 
                                     override fun onReceivedError(
@@ -449,7 +491,7 @@ fun LanceBuddyMusicScreen(
                                 Spacer(modifier = Modifier.height(8.dp))
 
                                 Text(
-                                    text = errorMessage ?: "Unable to connect to https://music.lancebuddy.in. You can still listen to your Downloaded playlist offline.",
+                                    text = errorMessage ?: "Unable to connect to https://music.lancebuddy.in. You can still listen to your Downloads playlist offline.",
                                     style = MaterialTheme.typography.bodyMedium.copy(
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     ),
@@ -487,7 +529,7 @@ fun LanceBuddyMusicScreen(
                                     ) {
                                         Icon(Icons.Default.LibraryMusic, contentDescription = null, tint = MusicCyanSecondary, modifier = Modifier.size(18.dp))
                                         Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Downloaded Playlist", color = Color.White)
+                                        Text("Downloads Playlist", color = Color.White)
                                     }
                                 }
                             }
@@ -565,7 +607,7 @@ fun LanceBuddyMusicScreen(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.LibraryMusic,
-                                contentDescription = "Downloaded Playlist",
+                                contentDescription = "Downloads Playlist",
                                 modifier = Modifier.size(24.dp)
                             )
                         }
@@ -609,7 +651,7 @@ fun LanceBuddyMusicScreen(
         onDeleteSong = { song ->
             scope.launch {
                 repository.deleteSong(song)
-                snackbarHostState.showSnackbar("Removed '${song.title}' from Downloaded")
+                snackbarHostState.showSnackbar("Removed '${song.title}' from Downloads")
             }
         },
         onDownloadManualUrl = { url, title ->

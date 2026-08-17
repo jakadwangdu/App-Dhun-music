@@ -121,7 +121,7 @@ fun DownloadedPlaylistSheet(
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
                         Text(
-                            text = "Downloaded",
+                            text = "Downloads",
                             style = MaterialTheme.typography.titleLarge.copy(
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White
@@ -206,7 +206,7 @@ fun DownloadedPlaylistSheet(
                         )
                         Spacer(modifier = Modifier.width(12.dp))
                         Text(
-                            text = "Saving song to Downloaded playlist... ${(downloadProgress * 100).toInt()}%",
+                            text = "Saving song to Downloads playlist... ${(downloadProgress * 100).toInt()}%",
                             style = MaterialTheme.typography.bodySmall.copy(color = Color.White)
                         )
                     }
@@ -235,7 +235,7 @@ fun DownloadedPlaylistSheet(
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
-                            text = "No songs in Downloaded playlist yet",
+                            text = "No songs in Downloads playlist yet",
                             style = MaterialTheme.typography.bodyMedium.copy(
                                 fontWeight = FontWeight.SemiBold,
                                 color = Color.White
@@ -403,12 +403,12 @@ fun DownloadMusicDialog(
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text("Download Music to Playlist", color = Color.White, fontWeight = FontWeight.Bold)
+            Text("Download Music to Downloads Playlist", color = Color.White, fontWeight = FontWeight.Bold)
         },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
-                    "Enter the audio link or stream URL to save it directly into your Downloaded playlist for offline & background playback.",
+                    "Enter the audio link or stream URL to save it directly into your Downloads playlist for offline & background playback.",
                     style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
                 )
                 OutlinedTextField(

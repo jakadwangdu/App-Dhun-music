@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface DownloadedSongDao {
     @Query("SELECT * FROM downloaded_songs WHERE playlistName = :playlistName ORDER BY downloadedAt DESC")
-    fun getSongsByPlaylist(playlistName: String = "Downloaded"): Flow<List<DownloadedSong>>
+    fun getSongsByPlaylist(playlistName: String = "Downloads"): Flow<List<DownloadedSong>>
 
     @Query("SELECT * FROM downloaded_songs ORDER BY downloadedAt DESC")
     fun getAllDownloadedSongs(): Flow<List<DownloadedSong>>
