@@ -1,8 +1,6 @@
 package com.example.ui
 
 import android.annotation.SuppressLint
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -10,6 +8,7 @@ import android.net.Uri
 import android.os.Build
 import android.view.View
 import android.view.ViewGroup
+import android.webkit.DownloadListener
 import android.webkit.PermissionRequest
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
@@ -19,14 +18,10 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
-import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -45,49 +40,32 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.automirrored.filled.OpenInNew
-import androidx.compose.material.icons.filled.Audiotrack
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.DeleteSweep
-import androidx.compose.material.icons.filled.Fullscreen
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.ScreenLockPortrait
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.SignalWifiConnectedNoInternet4
 import androidx.compose.material.icons.filled.Wifi
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -95,16 +73,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.data.local.DownloadedSong
+import com.example.data.local.MusicDatabase
+import com.example.data.repository.MusicRepository
 import com.example.network.NetworkMonitor
+import com.example.service.MusicDownloadManager
+import com.example.service.MusicPlaybackService
 import com.example.ui.theme.MusicCyanSecondary
 import com.example.ui.theme.MusicDarkBackground
 import com.example.ui.theme.MusicDarkSurfaceContainer
@@ -123,6 +105,15 @@ fun LanceBuddyMusicScreen(
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
+    // Database and Repository
+    val database = remember { MusicDatabase.getDatabase(context) }
+    val repository = remember { MusicRepository(database.downloadedSongDao()) }
+    val downloadManager = remember { MusicDownloadManager(context, repository) }
+
+    // Reactive states
+    val downloadedSongs by repository.downloadedSongs.collectAsStateWithLifecycle(initialValue = emptyList())
+    val playbackState by MusicPlaybackService.playbackState.collectAsStateWithLifecycle()
+
     val networkMonitor = remember { NetworkMonitor(context) }
     val isOnline by networkMonitor.isOnline.collectAsState(initial = true)
 
@@ -131,15 +122,12 @@ fun LanceBuddyMusicScreen(
     var pageTitle by remember { mutableStateOf("LanceBuddy Music") }
     var isLoading by remember { mutableStateOf(true) }
     var progress by remember { mutableFloatStateOf(0.1f) }
-    var canGoBack by remember { mutableStateOf(false) }
-    var canGoForward by remember { mutableStateOf(false) }
     var hasError by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    var showMenu by remember { mutableStateOf(false) }
-    var showAboutDialog by remember { mutableStateOf(false) }
-    var isKeepScreenOn by remember { mutableStateOf(true) }
-    var isCompactHeader by remember { mutableStateOf(false) }
+    var showDownloadedSheet by remember { mutableStateOf(false) }
+    var isDownloading by remember { mutableStateOf(false) }
+    var downloadProgress by remember { mutableFloatStateOf(0f) }
 
     var fileUploadCallback by remember { mutableStateOf<ValueCallback<Array<Uri>>?>(null) }
     var customView by remember { mutableStateOf<View?>(null) }
@@ -170,14 +158,11 @@ fun LanceBuddyMusicScreen(
         }
     }
 
-    // Keep screen on default
-    LaunchedEffect(isKeepScreenOn) {
-        onToggleKeepScreenOn(isKeepScreenOn)
-    }
-
-    // Hardware back press handler
+    // Back handler
     BackHandler {
-        if (customView != null) {
+        if (showDownloadedSheet) {
+            showDownloadedSheet = false
+        } else if (customView != null) {
             customViewCallback?.onCustomViewHidden()
             customView = null
             customViewCallback = null
@@ -196,17 +181,37 @@ fun LanceBuddyMusicScreen(
         }
     }
 
+    // Download handler function
+    fun startDownload(url: String, suggestedTitle: String? = null, suggestedArtist: String? = null) {
+        scope.launch {
+            isDownloading = true
+            downloadProgress = 0f
+            snackbarHostState.showSnackbar("Downloading track to 'Downloaded' playlist...")
+
+            val result = downloadManager.downloadSong(
+                url = url,
+                suggestedTitle = suggestedTitle ?: pageTitle.takeIf { !it.contains("LanceBuddy", ignoreCase = true) },
+                suggestedArtist = suggestedArtist ?: "LanceBuddy Music",
+                onProgress = { p -> downloadProgress = p }
+            )
+
+            isDownloading = false
+            result.onSuccess { song ->
+                snackbarHostState.showSnackbar("Saved '${song.title}' to Downloaded playlist!")
+            }.onFailure { err ->
+                snackbarHostState.showSnackbar("Download failed: ${err.localizedMessage}")
+            }
+        }
+    }
+
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MusicDarkBackground
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-            ) {
+            Column(modifier = Modifier.fillMaxSize()) {
 
-                // Offline Notice Bar (if offline)
+                // Offline Notice Bar
                 AnimatedVisibility(visible = !isOnline) {
                     Surface(
                         color = Color(0xFFB91C1C),
@@ -215,43 +220,56 @@ fun LanceBuddyMusicScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .statusBarsPadding()
                                 .padding(horizontal = 16.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
-                                    imageVector = Icons.Default.SignalWifiConnectedNoInternet4,
-                                    contentDescription = "No Connection",
+                                    imageVector = Icons.Default.Wifi,
+                                    contentDescription = "Offline",
                                     tint = Color.White,
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "No internet connection. Audio streams may pause.",
-                                    style = MaterialTheme.typography.labelSmall.copy(color = Color.White)
+                                    text = "Offline Mode - You can play from 'Downloaded' playlist",
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Medium
+                                    )
                                 )
                             }
                             TextButton(
-                                onClick = {
-                                    hasError = false
-                                    webViewRef?.reload()
-                                },
-                                modifier = Modifier.height(28.dp)
-                            ) {
-                                Text(
-                                    text = "Retry",
-                                    style = MaterialTheme.typography.labelSmall.copy(
-                                        color = Color.White,
-                                        fontWeight = FontWeight.Bold
-                                    )
+                                onClick = { showDownloadedSheet = true },
+                                colors = ButtonDefaults.textButtonColors(
+                                    contentColor = Color.White
                                 )
+                            ) {
+                                Text("Open", fontWeight = FontWeight.Bold)
                             }
                         }
                     }
                 }
 
-                // WebView Container / Error state
+                // Loading Bar
+                AnimatedVisibility(
+                    visible = isLoading && progress < 1f,
+                    enter = fadeIn(),
+                    exit = fadeOut()
+                ) {
+                    LinearProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(2.dp),
+                        color = MusicPinkTertiary,
+                        trackColor = Color.Transparent
+                    )
+                }
+
+                // Main Content (WebView & Overlays)
                 Box(modifier = Modifier.weight(1f)) {
                     AndroidView(
                         factory = { ctx ->
@@ -260,7 +278,6 @@ fun LanceBuddyMusicScreen(
                                     ViewGroup.LayoutParams.MATCH_PARENT,
                                     ViewGroup.LayoutParams.MATCH_PARENT
                                 )
-
                                 isVerticalScrollBarEnabled = true
                                 isHorizontalScrollBarEnabled = false
 
@@ -278,7 +295,12 @@ fun LanceBuddyMusicScreen(
                                     setSupportZoom(true)
                                     cacheMode = WebSettings.LOAD_DEFAULT
                                     mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                                    userAgentString = settings.userAgentString + " LanceBuddyMusicNativeApp/1.0"
+                                    userAgentString = settings.userAgentString + " LanceBuddyMusicNativeApp/1.1"
+                                }
+
+                                // Intercept audio file downloads to save into 'Downloaded' playlist
+                                setDownloadListener { url, _, _, _, _ ->
+                                    startDownload(url)
                                 }
 
                                 webChromeClient = object : WebChromeClient() {
@@ -304,12 +326,10 @@ fun LanceBuddyMusicScreen(
                                     ): Boolean {
                                         fileUploadCallback?.onReceiveValue(null)
                                         fileUploadCallback = filePathCallback
-
                                         val intent = fileChooserParams?.createIntent() ?: Intent(Intent.ACTION_GET_CONTENT).apply {
                                             type = "*/*"
                                             addCategory(Intent.CATEGORY_OPENABLE)
                                         }
-
                                         try {
                                             filePickerLauncher.launch(intent)
                                             return true
@@ -335,15 +355,12 @@ fun LanceBuddyMusicScreen(
                                     override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                                         isLoading = true
                                         url?.let { currentUrl = it }
-                                        canGoBack = view?.canGoBack() == true
-                                        canGoForward = view?.canGoForward() == true
                                     }
 
                                     override fun onPageFinished(view: WebView?, url: String?) {
                                         isLoading = false
                                         url?.let { currentUrl = it }
-                                        canGoBack = view?.canGoBack() == true
-                                        canGoForward = view?.canGoForward() == true
+                                        MusicPlaybackService.startWebBackground(ctx)
                                     }
 
                                     override fun onReceivedError(
@@ -363,12 +380,17 @@ fun LanceBuddyMusicScreen(
                                     ): Boolean {
                                         val uri = request?.url ?: return false
                                         val scheme = uri.scheme ?: return false
+                                        val path = uri.toString().lowercase()
 
-                                        if (scheme == "http" || scheme == "https") {
-                                            return false // Load in WebView
+                                        if (path.endsWith(".mp3") || path.endsWith(".m4a") || path.endsWith(".wav") || path.endsWith(".flac")) {
+                                            startDownload(uri.toString())
+                                            return true
                                         }
 
-                                        // External scheme (tel, mailto, spotify, intent, etc.)
+                                        if (scheme == "http" || scheme == "https") {
+                                            return false
+                                        }
+
                                         return try {
                                             val intent = Intent(Intent.ACTION_VIEW, uri)
                                             ctx.startActivity(intent)
@@ -427,7 +449,7 @@ fun LanceBuddyMusicScreen(
                                 Spacer(modifier = Modifier.height(8.dp))
 
                                 Text(
-                                    text = errorMessage ?: "Unable to connect to https://music.lancebuddy.in. Please verify your internet connection or URL status.",
+                                    text = errorMessage ?: "Unable to connect to https://music.lancebuddy.in. You can still listen to your Downloaded playlist offline.",
                                     style = MaterialTheme.typography.bodyMedium.copy(
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     ),
@@ -456,17 +478,16 @@ fun LanceBuddyMusicScreen(
                                         Text("Retry")
                                     }
 
-                                    OutlinedButton(
-                                        onClick = {
-                                            hasError = false
-                                            errorMessage = null
-                                            webViewRef?.loadUrl(DEFAULT_MUSIC_URL)
-                                        },
-                                        modifier = Modifier.testTag("open_home_button")
+                                    Button(
+                                        onClick = { showDownloadedSheet = true },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MusicDarkSurfaceContainer
+                                        ),
+                                        modifier = Modifier.testTag("open_downloaded_from_error")
                                     ) {
-                                        Icon(Icons.Default.Home, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        Icon(Icons.Default.LibraryMusic, contentDescription = null, tint = MusicCyanSecondary, modifier = Modifier.size(18.dp))
                                         Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Homepage")
+                                        Text("Downloaded Playlist", color = Color.White)
                                     }
                                 }
                             }
@@ -518,7 +539,47 @@ fun LanceBuddyMusicScreen(
                             }
                         }
                     }
+
+                    // Floating Downloaded Playlist Button
+                    FloatingActionButton(
+                        onClick = { showDownloadedSheet = true },
+                        containerColor = MusicVioletPrimary,
+                        contentColor = Color.White,
+                        elevation = FloatingActionButtonDefaults.elevation(6.dp),
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(end = 16.dp, bottom = if (playbackState.currentSong != null) 76.dp else 16.dp)
+                            .testTag("fab_downloaded_playlist")
+                    ) {
+                        BadgedBox(
+                            badge = {
+                                if (downloadedSongs.isNotEmpty()) {
+                                    Badge(
+                                        containerColor = MusicPinkTertiary,
+                                        contentColor = Color.White
+                                    ) {
+                                        Text("${downloadedSongs.size}")
+                                    }
+                                }
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.LibraryMusic,
+                                contentDescription = "Downloaded Playlist",
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
                 }
+
+                // Mini Player Bar (for active offline song playback & background controls)
+                MiniPlayerBar(
+                    playbackState = playbackState,
+                    onTogglePlayPause = { MusicPlaybackService.togglePlayPause(context) },
+                    onNext = { MusicPlaybackService.skipNext(context) },
+                    onPrev = { MusicPlaybackService.skipPrev(context) },
+                    onClickBar = { showDownloadedSheet = true }
+                )
             }
 
             // Snackbar Host
@@ -526,66 +587,35 @@ fun LanceBuddyMusicScreen(
                 hostState = snackbarHostState,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(16.dp)
+                    .padding(bottom = if (playbackState.currentSong != null) 80.dp else 16.dp)
             )
         }
     }
 
-    // About Dialog
-    if (showAboutDialog) {
-        AlertDialog(
-            onDismissRequest = { showAboutDialog = false },
-            title = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clip(CircleShape)
-                            .background(MusicVioletPrimary),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Audiotrack,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text("LanceBuddy Music")
-                }
-            },
-            text = {
-                Column {
-                    Text(
-                        text = "Native Android client for LanceBuddy Music web application.",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        text = "Webapp URL: https://music.lancebuddy.in",
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            color = MusicCyanSecondary,
-                            fontWeight = FontWeight.Bold
-                        )
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Features:\n• Continuous audio stream support\n• Native navigation controls & gesture backstack\n• Screen wake lock & media acceleration\n• Offline and network recovery handling",
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = { showAboutDialog = false },
-                    colors = ButtonDefaults.buttonColors(containerColor = MusicVioletPrimary)
-                ) {
-                    Text("Got it")
-                }
+    // Downloaded Playlist Sheet Modal
+    DownloadedPlaylistSheet(
+        isOpen = showDownloadedSheet,
+        onDismiss = { showDownloadedSheet = false },
+        songs = downloadedSongs,
+        playbackState = playbackState,
+        onPlaySong = { song ->
+            MusicPlaybackService.playSong(context, song, downloadedSongs)
+        },
+        onPlayAll = {
+            if (downloadedSongs.isNotEmpty()) {
+                MusicPlaybackService.playSong(context, downloadedSongs.first(), downloadedSongs)
             }
-        )
-    }
+        },
+        onDeleteSong = { song ->
+            scope.launch {
+                repository.deleteSong(song)
+                snackbarHostState.showSnackbar("Removed '${song.title}' from Downloaded")
+            }
+        },
+        onDownloadManualUrl = { url, title ->
+            startDownload(url, suggestedTitle = title.takeIf { it.isNotBlank() })
+        },
+        isDownloading = isDownloading,
+        downloadProgress = downloadProgress
+    )
 }
